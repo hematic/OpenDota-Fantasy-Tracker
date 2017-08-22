@@ -1,4 +1,146 @@
-﻿Function Set-Worksheet {
+class FantasyMatch {
+    [String]$MatchID
+    [String]$hero
+    [Object]$Info
+    [Double]$Kills
+    [Double]$KillsPoints
+    [Double]$Deaths
+    [Double]$DeathsPoints
+    [Double]$LastHits
+    [Double]$LasthitPoints
+    [Double]$Denies
+    [Double]$DenyPoints
+    [Double]$GPM
+    [Double]$GPMPoints
+    [Double]$TFPercentage
+    [Double]$TFPoints
+    [Int]$ObsWards
+    [Double]$ObsPoints
+    [Double]$CampsStacked
+    [Double]$StackPoints
+    [Double]$RunesGathered
+    [Double]$RunesPoints
+    [Double]$FirstBloodPoints
+    [Double]$TowerPoints
+    [Double]$RoshanPoints
+    [Double]$SecondsofStun
+    [Double]$StunPoints
+
+    # Constructor
+    FantasyMatch([Object]$Match,$AccountID) {
+        $this._parseInfo($Match, $AccountID)
+        $this.MatchID = $this.Info.'match_id'
+        $this.Hero = $Global:Heroes | Where-Object {$_.id -eq $this.info.'hero_id'} | Select-Object -ExpandProperty 'Localized_name'
+        $this._CalcKillPoints()
+        $this._CalcDeathPoints()
+        $this._CalcLastHitPoints()
+        $this._CalcDenyPoints()
+        $this._CalcGPMPoints()
+        $this._CalcTeamFightPoints()
+        $this._CalcObserverWardPoints()
+        $this._CalcStackPoints()
+        $this._CalcRunesPoints()
+        $this._FirstBloodPoints()
+        $this._CalcStunPoints()
+        $this.TowerPoints = $this.Info.'tower_kills'
+        $this.RoshanPoints = $this.Info.'roshan_kills'
+
+    }
+
+    # Method: Parse Player Data from the match
+    hidden [void] _parseInfo($Match, $AccountID) {
+        Try {
+            $this.Info = $Match.players | Where-object {$_.'account_id' -eq $AccountID}
+        }
+        Catch [System.Exception] {
+            Write-Error $_.Exception.Message
+        }
+    }
+
+    #Calculate Kill Points
+    hidden [void] _CalcKillPoints() {
+        $this.Kills = $this.info.Kills
+        [Double]$this.KillsPoints = $this.Kills * .3
+    }
+
+    #Calculate Death Points
+    hidden [void] _CalcDeathPoints() {
+        $this.Deaths = $this.info.Deaths
+        [Double]$this.DeathsPoints = 3 - ($this.Deaths * .3)
+    }
+
+    #Calculate Last Hit Points
+    hidden [void] _CalcLastHitPoints() {
+        $this.LastHits = $this.info.'Last_Hits'
+        [Double]$this.LasthitPoints = $this.Lasthits * .003
+    }
+
+    #Calculate Deny Points (not that they matter)
+    hidden [void] _CalcDenyPoints() {
+        $this.Denies = $this.info.Denies
+        [Double]$this.DenyPoints = $this.Denies * .003
+    }
+
+    #Calculate GPM Points
+    hidden [void] _CalcGPMPoints() {
+        $this.GPM = $this.info.'gold_per_min'
+        [Double]$this.GPMPoints = $this.GPM * .002
+    }
+
+    #Calculate TeamFight Points
+    hidden [void] _CalcTeamFightPoints() {
+        $this.TFPercentage = $this.info.'teamfight_participation'
+        [Double]$this.TFPoints = $this.TFPercentage * 3
+    }
+
+    #Calculate Observer Ward Points
+    hidden [void] _CalcObserverWardPoints() {
+        [Int]$this.ObsWards = $this.info.'observer_uses'
+        [Double]$this.ObsPoints = $this.ObsWards * .5
+    }
+
+    #Calculate Stacked Camps Points
+    hidden [void] _CalcStackPoints() {
+        $this.CampsStacked = $this.info.'camps_stacked'
+        [Double]$this.StackPoints = $this.CampsStacked * .5
+    }
+
+    #Calculate Rune Points
+    hidden [void] _CalcRunesPoints() {
+        $this.RunesGathered = $this.info.'rune_pickups'
+        [Double]$this.RunesPoints = $this.RunesGathered * .25
+    }
+
+    #Calculate First Blood Points
+    hidden [void] _FirstBloodPoints() {
+        [Double]$this.FirstBloodPoints = $this.info.'firstblood_claimed'  * 4
+    }
+
+    #Calculate Seconds of Stun Points
+    hidden [void] _CalcStunPoints() {
+        $this.SecondsofStun = $this.info.stuns
+        [Double]$this.StunPoints = $this.SecondsofStun * .05
+    }
+
+}
+
+Function New-OutputFile {
+    Try {
+        $Date = (Get-Date)
+        $Month = (Get-Culture).DateTimeFormat.GetMonthName($Date.month)
+        $Day = $Date.Day
+        $year = $Date.Year
+        $ReportFile = "c:\temp\Dota 2 Fantasy - $Month-$Day-$Year.xlsx"
+        Copy-Item -Path 'C:\temp\Dota 2 Fantasy.xlsx' -Destination $ReportFile
+        Write-Output $ReportFile
+    }
+    Catch {
+        Write-Host "Unable to create Dota 2 Fantasy.xlsx from the template." -ForegroundColor Red
+        Write-Error "Unable to create Dota 2 Fantasy.xlsx from the template."
+    }
+}
+
+Function Set-Worksheet {
     [CmdletBinding()]
     Param(
         [ValidateSet('Phillip', 'Matt', 'Brad','Summary')]
@@ -228,46 +370,6 @@ Function Get-MatchData {
     Write-Output $Result
 }
 
-Function Get-FantasyData {
-    Param(
-        [String]$AccountID,
-        [Object]$Match
-    )
-
-    $UserData = $Match.players | Where-object {$_.'account_id' -eq $AccountID}
-
-    $fantasyobj = New-Object -TypeName pscustomobject -ArgumentList @{
-        
-        MatchID          = $match.'match_id'
-        Hero             = $Global:Heroes | Where-Object {$_.id -eq $UserData.'hero_id'} | Select -ExpandProperty 'Localized_name'
-        Kills            = $UserData.kills
-        KillsPoints      = Get-KillPoints -Kills $UserData.kills
-        Deaths           = $UserData.deaths
-        DeathsPoints     = Get-DeathPoints -Deaths $UserData.deaths
-        LastHits         = $UserData.'Last_Hits'
-        LastHitPoints    = Get-LastHitPoints -Lasthits $UserData.'Last_Hits'
-        Denies           = $UserData.Denies
-        DenyPoints       = Get-DenyPoints -Denies $UserData.Denies
-        GPM              = $UserData.'gold_per_min'
-        GPMPoints        = [Double]($UserData.'gold_per_min' * .002)
-        TowerPoints      = $Userdata.'tower_kills'
-        RoshanPoints     = $UserData.'roshan_kills'
-        TFPercentage     = $UserData.'teamfight_participation'
-        TFPoints         = Get-TeamFightPoints -TFPercentage $UserData.'teamfight_participation'
-        ObsWards         = $UserData.'observer_uses'
-        ObsPoints        = Get-ObserverPoints -Observers $UserData.'observer_uses'
-        CampsStacked     = $userData.'camps_stacked'  
-        StackPoints      = Get-StackPoints -CampsStacked $userData.'camps_stacked'
-        RunesGathered    = $UserData.'rune_pickups'
-        RunesPoints      = Get-RunePoints -Runes $UserData.'rune_pickups'
-        FirstBloodPoints = Get-FirstBloodPoints -FirstBlood $userData.'firstblood_claimed'
-        SecondsofStun    = $userdata.stuns
-        StunPoints       = Get-StunPoints -Stuns $userdata.stuns
-    }
-
-    Write-output $fantasyobj
-}
-
 Function Get-FantasyTotals {
     Param(
         $D
@@ -276,107 +378,15 @@ Function Get-FantasyTotals {
     Write-Output $Total
 }
 
-Function Get-KillPoints {
-    Param(
-        $Kills
-    )
-
-    [Double]$KillPoints = $Kills * .3
-    Write-Output $KillPoints
-}
-
-Function Get-DeathPoints {
-    Param(
-        $Deaths
-    )
-
-    [Double]$DeathPoints = 3 - ($Deaths * .3)
-    Write-Output $DeathPoints
-}
-
-Function Get-LastHitPoints {
-    Param(
-        $Lasthits
-    )
-
-    [Double]$LasthitsPoints = $Lasthits * .003
-    Write-Output $LasthitsPoints
-}
-
-Function Get-DenyPoints {
-    Param(
-        $Denies
-    )
-
-    [Double]$DeniesPoints = $Denies * .003
-    Write-Output $DeniesPoints
-}
-
-Function Get-GPMPoints {
-    Param(
-        $GPM
-    )
-
-    [Double]$GPMPoints = $GPM * .002
-    Write-Output $GPMPoints
-}
-
-Function Get-TeamFightPoints {
-    Param(
-        $TFPercentage
-    )
-
-    [Double]$TFPoints = $TFPercentage * 3
-    Write-Output $TFPoints
-}
-
-Function Get-ObserverPoints {
-    Param(
-        $Observers
-    )
-
-    [Double]$ObserversPoints = $Observers * .5
-    Write-Output $ObserversPoints
-}
-
-Function Get-StackPoints {
-    Param(
-        $CampsStacked
-    )
-
-    [Double]$CampsPoints = $CampsStacked * .5
-    Write-Output $CampsPoints
-}
-
-Function Get-RunePoints {
-    Param(
-        $Runes
-    )
-
-    [Double]$RunesPoints = $Runes * .25
-    Write-Output $RunesPoints
-}
-
-Function Get-FirstBloodPoints {
-    Param(
-        $FirstBlood
-    )
-
-    [Double]$FirstBloodPoints = $FirstBlood * 4
-    Write-Output $FirstBloodPoints
-}
-
-Function Get-StunPoints {
-    Param(
-        $Stuns
-    )
-
-    [Double]$StunsPoints = $Stuns * .05
-    Write-Output $StunsPoints
-}
-
-#Report File
-$ReportFile = 'C:\temp\Dota 2 Fantasy.xlsx'
+#region verify that template.xlsx is present.
+	Try{
+		$ReportFile = New-OutputFile
+	}
+	Catch{
+		Write-Error $_
+		Exit;
+	}
+#endregion
 
 #Get Heroes
 $Global:Heroes = Get-Heroes
@@ -388,27 +398,23 @@ $MattAccountID = '71462475'
 
 #Get Matches to cross-reference
 [array]$PhillipRecentMatches = Get-Matches -AccountID $PhillipAccountID
-[array]$BradRecentMatches = Get-Matches -AccountID $BradAccountID
-[array]$MattRecentMatches = Get-Matches -AccountID $MattAccountID
+[array]$BradRecentMatches    = Get-Matches -AccountID $BradAccountID
+[array]$MattRecentMatches    = Get-Matches -AccountID $MattAccountID
 
 #Define Array Lists
 [Array]$PhillipMatches = @()
 [Array]$BradMatches = @()
 [Array]$MattMatches = @()
 
-$Global:PhillipCount = $PhillipMatches.count
-$Global:MattCount = $MattMatches.count
-$Global:BradCount = $BradMatches.count
-
 Foreach ($Match in $PhillipRecentMatches) {
     If ($BradRecentMatches.'match_id' -contains $match.'match_id' -and $MattRecentMatches.'match_id' -contains $match.'match_id') {
         Write-Host "Gathering Match Data for Match : $($Match.'match_id')"
         $Data = Get-MatchData -MatchID $Match.'match_id'
-        $PhillipFantasy = Get-FantasyData -AccountID $PhillipAccountID -Match $Data
+        $PhillipFantasy = New-Object -TypeName FantasyMatch -ArgumentList $Data,$PhillipAccountID
         $PhillipMatches += $PhillipFantasy
-        $BradFantasy = Get-FantasyData -AccountID $BradAccountID -Match $Data
+        $BradFantasy = New-Object -TypeName FantasyMatch -ArgumentList $Data,$BradAccountID
         $BradMatches += $BradFantasy
-        $MattFantasy = Get-FantasyData -AccountID $MattAccountID -Match $Data
+        $MattFantasy = New-Object -TypeName FantasyMatch -ArgumentList $Data,$MattAccountID
         $MattMatches += $MattFantasy
     }
 }
