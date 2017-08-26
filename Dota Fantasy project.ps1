@@ -15,6 +15,10 @@ class FantasyMatch {
     [Int]$KillStreakPoints
     [Int]$NetWorth
     [Int]$CourierKills
+    [Int]$BarracksDamage
+    [Int]$Tier1Damage
+    [Int]$Tier2Damage
+    [Int]$Tier3Damage
     [Double]$CourierKillsPoints
     [Double]$DurationMinutesRounded
     [Double]$KillsPoints
@@ -31,10 +35,6 @@ class FantasyMatch {
     [Double]$RunesPoints
     [Double]$FirstBloodPoints
     [Double]$TowerPoints
-    [Int]$BarracksDamage
-    [Int]$Tier1Damage
-    [Int]$Tier2Damage
-    [Int]$Tier3Damage
     [Double]$BldgDamagePoints
     [Double]$RoshanPoints
     [Double]$SecondsofStun
@@ -47,8 +47,8 @@ class FantasyMatch {
     #region Constructor
     FantasyMatch([Object]$Match,$AccountID) {
         $this._parseInfo($Match, $AccountID)
-        $this.MatchID = $this.Info.'match_id'
-        $this.Hero = $Global:Heroes | Where-Object {$_.id -eq $this.info.'hero_id'} | Select-Object -ExpandProperty 'Localized_name'
+        $this._ParseMatchID()
+        $this._ParseHero()
         $this._CalcDuration()
         $this._CalcKillPoints()
         $this._CalcAssistPoints()
@@ -60,13 +60,13 @@ class FantasyMatch {
         $this._CalcObserverWardPoints()
         $this._CalcStackPoints()
         $this._CalcRunesPoints()
-        $this._FirstBloodPoints()
+        $this._CalcFirstBloodPoints()
         $this._CalcCourierPoints()
         $this._CalcStunPoints()
         $this._CalcDewardPoints()
         $this._CalcHighestKillStreakPoints()
         $this._CalcBuildingPoints()
-        $this.RoshanPoints = $this.Info.'roshan_kills'
+        $this._CalcRoshanPoints()
         $this._CalcTotalPoints()
         $this._CalcPointsPerMinute()
 
@@ -81,6 +81,16 @@ class FantasyMatch {
         Catch [System.Exception] {
             Write-Error $_.Exception.Message
         }
+    }
+
+    #Determine Hero
+    hidden [void] _ParseHero() {
+        $this.Hero = $Global:Heroes | Where-Object {$_.id -eq $this.info.'hero_id'} | Select-Object -ExpandProperty 'Localized_name'
+    }
+
+    #Determine Match ID
+    hidden [void] _ParseMatchID() {
+        $this.MatchID = $this.Info.'match_id'
     }
 
     #Calculate Duration
@@ -127,8 +137,14 @@ class FantasyMatch {
 
     #Calculate TeamFight Points
     hidden [void] _CalcTeamFightPoints() {
-        $this.TFPercentage = $this.info.'teamfight_participation'
-        [Double]$this.TFPoints  = ([math]::log10($this.TFPercentage * 100) - [math]::log10(30)) * 3 / (2 - [math]::log10(30))
+        If(-not $this.info.'teamfight_participation'){
+            $this.TFPoints = 0
+            $this.TFPercentage
+        }
+        Else{
+            $this.TFPercentage = $this.info.'teamfight_participation'
+            [Double]$this.TFPoints  = [Math]::Round(([math]::log10($this.TFPercentage * 100) - [math]::log10(30)) * 3 / (2 - [math]::log10(30)), 2)
+        }
     }
 
     #Calculate Observer Ward Points
@@ -160,13 +176,18 @@ class FantasyMatch {
     }
 
     #Calculate First Blood Points
-    hidden [void] _FirstBloodPoints() {
+    hidden [void] _CalcFirstBloodPoints() {
         [Double]$this.FirstBloodPoints = [Math]::Round($this.info.'firstblood_claimed' * 4, 2)
     }
 
     #Calculate Courier Kills Points
     hidden [void] _CalcCourierPoints() {
         [Double]$this.CourierKillsPoints = [Math]::Round($this.info.'courier_kills' * 1, 2)
+    }
+
+    #Calculate Roshan Kills Points
+    hidden [void] _CalcRoshanPoints() {
+        $this.RoshanPoints = $this.Info.'roshan_kills'
     }
 
     #Calculate Seconds of Stun Points
@@ -183,27 +204,31 @@ class FantasyMatch {
     #Calculate Highest Kill STreak
     hidden [void] _CalcHighestKillStreakPoints() {
         $Streaks = @()
+        If(-not $this.info.'kill_streaks'){
+            $HighestKillStreak = 0
+        }
+        Else{
         ($this.info.'kill_streaks' | Get-Member -MemberType NoteProperty).Name | %{$Streaks += [Int]$_}
         $HighestKillStreak = $Streaks | Sort-Object -Descending | select -First 1
 
-        Switch ($HighestKillStreak) {
+            Switch ($HighestKillStreak) {
 
-            {$_ -lt 3}  {$this.KillStreakPoints = 0}
-            {$_ -eq 3}  {$this.KillStreakPoints = 1}    
-            {$_ -eq 4}  {$this.KillStreakPoints = 2} 
-            {$_ -eq 5}  {$this.KillStreakPoints = 2.5} 
-            {$_ -eq 6}  {$this.KillStreakPoints = 3}
-            {$_ -eq 7}  {$this.KillStreakPoints = 3.5}
-            {$_ -eq 8}  {$this.KillStreakPoints = 4} 
-            {$_ -eq 9}  {$this.KillStreakPoints = 4.5} 
-            {$_ -eq 10} {$this.KillStreakPoints = 5}
-            {$_ -eq 11} {$this.KillStreakPoints = 5.5} 
-            {$_ -eq 12} {$this.KillStreakPoints = 6}
-            {$_ -eq 13} {$this.KillStreakPoints = 6.5} 
-            {$_ -eq 14} {$this.KillStreakPoints = 7} 
-            {$_ -ge 15} {$this.KillStreakPoints = 10} 
+                {$_ -lt 3}  {$this.KillStreakPoints = 0}
+                {$_ -eq 3}  {$this.KillStreakPoints = 1}    
+                {$_ -eq 4}  {$this.KillStreakPoints = 2} 
+                {$_ -eq 5}  {$this.KillStreakPoints = 2.5} 
+                {$_ -eq 6}  {$this.KillStreakPoints = 3}
+                {$_ -eq 7}  {$this.KillStreakPoints = 3.5}
+                {$_ -eq 8}  {$this.KillStreakPoints = 4} 
+                {$_ -eq 9}  {$this.KillStreakPoints = 4.5} 
+                {$_ -eq 10} {$this.KillStreakPoints = 5}
+                {$_ -eq 11} {$this.KillStreakPoints = 5.5} 
+                {$_ -eq 12} {$this.KillStreakPoints = 6}
+                {$_ -eq 13} {$this.KillStreakPoints = 6.5} 
+                {$_ -eq 14} {$this.KillStreakPoints = 7} 
+                {$_ -ge 15} {$this.KillStreakPoints = 10} 
+            }
         }
-
     }
 
     #Calculate Total Fantasy Points
@@ -289,7 +314,7 @@ Function Set-Worksheet {
                 $ExcelWorkSheet.Cells.Item(1, 18) = 'Observers'
                 $ExcelWorkSheet.Cells.Item(1, 19) = 'Stacks'
                 $ExcelWorkSheet.Cells.Item(1, 20) = 'Dewards'
-
+  
                 $headerRange = $ExcelWorksheet.Range("A1", "T1")
                 $headerRange.AutoFilter() | Out-Null
             }
@@ -405,8 +430,8 @@ Function Set-Worksheet {
                 $ExcelWorkSheet.Cells.Item(1, 21) = 'Stacks'
                 $ExcelWorkSheet.Cells.Item(1, 22) = 'Dewards'
                 #ID
-                $ExcelWorkSheet.Cells.Item(1, 22) = 'Match ID'
-                $headerRange = $ExcelWorksheet.Range("a1", "V1")
+                $ExcelWorkSheet.Cells.Item(1, 23) = 'Match ID'
+                $headerRange = $ExcelWorksheet.Range("A1", "W1")
                 $headerRange.AutoFilter() | Out-Null
             }
             Catch {
@@ -536,9 +561,9 @@ $MattAccountID = '71462475'
 #endregion
 
 #region Get Matches to cross-reference
-[array]$PhillipRecentMatches = Get-Matches -AccountID $PhillipAccountID -DaysBack 30
-[array]$BradRecentMatches    = Get-Matches -AccountID $BradAccountID -DaysBack 30
-[array]$MattRecentMatches    = Get-Matches -AccountID $MattAccountID -DaysBack 30
+[array]$PhillipRecentMatches = Get-Matches -AccountID $PhillipAccountID -DaysBack 3
+[array]$BradRecentMatches    = Get-Matches -AccountID $BradAccountID -DaysBack 3
+[array]$MattRecentMatches    = Get-Matches -AccountID $MattAccountID -DaysBack 3
 #endregion
 
 #region Define Array Lists
